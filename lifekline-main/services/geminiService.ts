@@ -1,6 +1,9 @@
-
 import { UserInput, LifeDestinyResult, Gender } from "../types";
 import { BAZI_SYSTEM_INSTRUCTION } from "../constants";
+
+// TODO: 请将您的 OpenAI 格式密钥填入此处
+const API_KEY = "sk-UnpzkQCEqt3xRSs0FjzxkYKt8SULkjHTGviSoXsHtm0YHtTx"; 
+const API_BASE_URL = "https://max.openai365.top/v1";
 
 // Helper to determine stem polarity
 const getStemPolarity = (pillar: string): 'YANG' | 'YIN' => {
@@ -8,70 +11,22 @@ const getStemPolarity = (pillar: string): 'YANG' | 'YIN' => {
   const firstChar = pillar.trim().charAt(0);
   const yangStems = ['甲', '丙', '戊', '庚', '壬'];
   const yinStems = ['乙', '丁', '己', '辛', '癸'];
-
+  
   if (yangStems.includes(firstChar)) return 'YANG';
   if (yinStems.includes(firstChar)) return 'YIN';
   return 'YANG'; // fallback
 };
 
 export const generateLifeAnalysis = async (input: UserInput): Promise<LifeDestinyResult> => {
-
-  const { apiKey, apiBaseUrl, modelName } = input;
-
-  // FIX: Trim whitespace which causes header errors if copied with newlines
-  const cleanApiKey = apiKey ? apiKey.trim() : "";
-  const cleanBaseUrl = apiBaseUrl ? apiBaseUrl.trim().replace(/\/+$/, "") : "";
-  const targetModel = modelName && modelName.trim() ? modelName.trim() : "gemini-3-pro-preview";
-
-  // 本地演示模式：当 API Key 为 'demo' 时，使用预生成的本地数据
-  if (cleanApiKey.toLowerCase() === 'demo') {
-    console.log('🎯 使用本地演示模式');
-    const mockData = await fetch('/mock-data.json').then(r => r.json());
-    return {
-      chartData: mockData.chartPoints,
-      analysis: {
-        bazi: mockData.bazi || [],
-        summary: mockData.summary || "无摘要",
-        summaryScore: mockData.summaryScore || 5,
-        personality: mockData.personality || "无性格分析",
-        personalityScore: mockData.personalityScore || 5,
-        industry: mockData.industry || "无",
-        industryScore: mockData.industryScore || 5,
-        fengShui: mockData.fengShui || "建议多亲近自然，保持心境平和。",
-        fengShuiScore: mockData.fengShuiScore || 5,
-        wealth: mockData.wealth || "无",
-        wealthScore: mockData.wealthScore || 5,
-        marriage: mockData.marriage || "无",
-        marriageScore: mockData.marriageScore || 5,
-        health: mockData.health || "无",
-        healthScore: mockData.healthScore || 5,
-        family: mockData.family || "无",
-        familyScore: mockData.familyScore || 5,
-        crypto: mockData.crypto || "暂无交易分析",
-        cryptoScore: mockData.cryptoScore || 5,
-        cryptoYear: mockData.cryptoYear || "待定",
-        cryptoStyle: mockData.cryptoStyle || "现货定投",
-      },
-    };
-  }
-
-  if (!cleanApiKey) {
-    throw new Error("请在表单中填写有效的 API Key（输入 'demo' 可使用本地演示模式）");
-  }
-
-  // Check for non-ASCII characters to prevent obscure 'Failed to construct Request' errors
-  // If user accidentally pastes Chinese characters or emojis in the API key field
-  if (/[^\x00-\x7F]/.test(cleanApiKey)) {
-    throw new Error("API Key 包含非法字符（如中文或全角符号），请检查输入是否正确。");
-  }
-
-  if (!cleanBaseUrl) {
-    throw new Error("请在表单中填写有效的 API Base URL");
+  
+  // 简单检查 Key 是否已替换
+  if (!API_KEY || API_KEY.includes("YOUR_API_KEY_HERE")) {
+    console.warn("警告: API Key 尚未设置，请在 services/geminiService.ts 中填入密钥。");
   }
 
   const genderStr = input.gender === Gender.MALE ? '男 (乾造)' : '女 (坤造)';
   const startAgeInt = parseInt(input.startAge) || 1;
-
+  
   // Calculate Da Yun Direction accurately
   const yearStemPolarity = getStemPolarity(input.yearPillar);
   let isForward = false;
@@ -83,9 +38,9 @@ export const generateLifeAnalysis = async (input: UserInput): Promise<LifeDestin
   }
 
   const daYunDirectionStr = isForward ? '顺行 (Forward)' : '逆行 (Backward)';
-
-  const directionExample = isForward
-    ? "例如：第一步是【戊申】，第二步则是【己酉】（顺排）"
+  
+  const directionExample = isForward 
+    ? "例如：第一步是【戊申】，第二步则是【己酉】（顺排）" 
     : "例如：第一步是【戊申】，第二步则是【丁未】（逆排）";
 
   const userPrompt = `
@@ -128,26 +83,26 @@ export const generateLifeAnalysis = async (input: UserInput): Promise<LifeDestin
     1. 确认格局与喜忌。
     2. 生成 **1-100 岁 (虚岁)** 的人生流年K线数据。
     3. 在 \`reason\` 字段中提供流年详批。
-    4. 生成带评分的命理分析报告（包含性格分析、币圈交易分析、发展风水分析）。
+    4. 生成带评分的命理分析报告。
     
     请严格按照系统指令生成 JSON 数据。
   `;
 
   try {
-    const response = await fetch(`${cleanBaseUrl}/chat/completions`, {
+    const response = await fetch(`${API_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${cleanApiKey}`
+        'Authorization': `Bearer ${API_KEY}`
       },
       body: JSON.stringify({
-        model: targetModel,
+        model: "[备用渠道A] gemini-3-pro-preview", // 
         messages: [
-          { role: "system", content: BAZI_SYSTEM_INSTRUCTION + "\n\n请务必只返回纯JSON格式数据，不要包含任何markdown代码块标记。" },
+          { role: "system", content: BAZI_SYSTEM_INSTRUCTION },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.7,
-        max_tokens: 30000
+        response_format: { type: "json_object" },
+        temperature: 0.7
       })
     });
 
@@ -163,24 +118,8 @@ export const generateLifeAnalysis = async (input: UserInput): Promise<LifeDestin
       throw new Error("模型未返回任何内容。");
     }
 
-    // 从可能包含 markdown 代码块的内容中提取 JSON
-    let jsonContent = content;
-
-    // 尝试提取 ```json ... ``` 中的内容
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonContent = jsonMatch[1].trim();
-    } else {
-      // 如果没有代码块，尝试找到 JSON 对象
-      const jsonStartIndex = content.indexOf('{');
-      const jsonEndIndex = content.lastIndexOf('}');
-      if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-        jsonContent = content.substring(jsonStartIndex, jsonEndIndex + 1);
-      }
-    }
-
     // 解析 JSON
-    const data = JSON.parse(jsonContent);
+    const data = JSON.parse(content);
 
     // 简单校验数据完整性
     if (!data.chartPoints || !Array.isArray(data.chartPoints)) {
@@ -193,12 +132,8 @@ export const generateLifeAnalysis = async (input: UserInput): Promise<LifeDestin
         bazi: data.bazi || [],
         summary: data.summary || "无摘要",
         summaryScore: data.summaryScore || 5,
-        personality: data.personality || "无性格分析",
-        personalityScore: data.personalityScore || 5,
         industry: data.industry || "无",
         industryScore: data.industryScore || 5,
-        fengShui: data.fengShui || "建议多亲近自然，保持心境平和。",
-        fengShuiScore: data.fengShuiScore || 5,
         wealth: data.wealth || "无",
         wealthScore: data.wealthScore || 5,
         marriage: data.marriage || "无",
@@ -207,11 +142,6 @@ export const generateLifeAnalysis = async (input: UserInput): Promise<LifeDestin
         healthScore: data.healthScore || 5,
         family: data.family || "无",
         familyScore: data.familyScore || 5,
-        // Crypto Fields
-        crypto: data.crypto || "暂无交易分析",
-        cryptoScore: data.cryptoScore || 5,
-        cryptoYear: data.cryptoYear || "待定",
-        cryptoStyle: data.cryptoStyle || "现货定投",
       },
     };
   } catch (error) {
